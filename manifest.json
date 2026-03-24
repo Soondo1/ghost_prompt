@@ -13,7 +13,13 @@
     "*://chat.openai.com/*",
     "*://chatgpt.com/*",
     "*://claude.ai/*",
-    "*://gemini.google.com/*"
+    "*://gemini.google.com/*",
+    "*://*.perplexity.ai/*",
+    "*://*.deepseek.com/*",
+    "*://poe.com/*",
+    "*://copilot.microsoft.com/*",
+    "*://huggingface.co/chat/*",
+    "*://www.meta.ai/*"
   ],
   "background": {
     "service_worker": "src/background.js"
@@ -27,7 +33,13 @@
         "*://chat.openai.com/*",
         "*://chatgpt.com/*",
         "*://claude.ai/*",
-        "*://gemini.google.com/*"
+        "*://gemini.google.com/*",
+        "*://*.perplexity.ai/*",
+        "*://*.deepseek.com/*",
+        "*://poe.com/*",
+        "*://copilot.microsoft.com/*",
+        "*://huggingface.co/chat/*",
+        "*://www.meta.ai/*"
       ],
       "js": ["src/content.js"],
       "run_at": "document_idle"

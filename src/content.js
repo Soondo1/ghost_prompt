@@ -8,69 +8,100 @@
   let currentTarget = null;
   let suggestion = '';
   let ghostDiv = null;
-  let optimizationLevel = 'concise'; // default, can be set via storage
+  let optimizationLevel = 'concise';
+  let resizeObserver = null;
+  let lastPromptFetched = '';
 
-  // Load settings from chrome.storage
   chrome.storage.sync.get({ optimizationLevel: 'concise', enabled: true }, (data) => {
     optimizationLevel = data.optimizationLevel;
-    if (!data.enabled) return; // feature disabled
+    if (!data.enabled) return;
     console.log('👻 Prompt Ghost successfully injected onto', window.location.hostname);
     initGlobalListeners();
   });
 
   function initGlobalListeners() {
-    // Delegated event listeners grab input events from any field that exists or is added dynamically.
     document.body.addEventListener('input', (e) => {
-      if (isInputField(e.target)) {
-        onInput(e);
+      const target = (e.composedPath && e.composedPath()[0]) || e.target;
+      if (isInputField(target)) {
+        onInput(target);
+      } else {
+        clearGhost();
       }
     }, true);
 
     document.body.addEventListener('keydown', (e) => {
-      if (isInputField(e.target)) {
-        onKeyDown(e);
+      const target = (e.composedPath && e.composedPath()[0]) || e.target;
+      if (isInputField(target)) {
+        onKeyDown(e, target);
       }
     }, true);
+    
+    // Add scroll listener to update ghost text position
+    document.addEventListener('scroll', updateGhostPosition, true);
   }
 
   function isInputField(el) {
-    return el && (el.tagName === 'TEXTAREA' || el.isContentEditable);
+    if (!el) return false;
+    return el.tagName === 'TEXTAREA' || (el.isContentEditable && el.tagName !== 'BODY');
   }
 
-  function onInput(e) {
-    const target = e.target;
-    currentTarget = target;
+  function getCurrentText(el) {
+    if (el.tagName === 'TEXTAREA') return el.value;
+    return el.innerText || el.textContent || '';
+  }
+
+  function onInput(target) {
+    if (currentTarget !== target) {
+      if (resizeObserver && currentTarget) {
+         resizeObserver.disconnect();
+      }
+      currentTarget = target;
+      resizeObserver = new ResizeObserver(() => updateGhostPosition());
+      resizeObserver.observe(currentTarget);
+    }
+
+    const text = getCurrentText(target);
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => generateSuggestion(target.value), DEBOUNCE_DELAY);
-  }
-
-  // API Endpoints
-  const API_URL = 'https://ghost-prompt.vercel.app/optimize';
-
-  async function generateSuggestion(text) {
+    
     if (!text.trim()) {
       clearGhost();
       return;
     }
-    try {
-      const resp = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text, level: optimizationLevel })
-      });
-      const data = await resp.json();
-      suggestion = data.optimized || '';
-      if (suggestion) renderGhost(suggestion);
-      else clearGhost();
-    } catch (err) {
-      console.error('Prompt Ghost error:', err);
-      clearGhost();
-    }
+
+    debounceTimer = setTimeout(() => generateSuggestion(text), DEBOUNCE_DELAY);
+  }
+
+  function generateSuggestion(text) {
+    lastPromptFetched = text;
+    
+    chrome.runtime.sendMessage(
+      { action: 'fetchSuggestion', prompt: text, level: optimizationLevel },
+      (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Prompt Ghost error:', chrome.runtime.lastError);
+          clearGhost();
+          return;
+        }
+        
+        if (response && response.success && response.data.optimized) {
+          // Race condition check: Ensure the user hasn't typed more since the request
+          const currentText = getCurrentText(currentTarget);
+          if (currentText !== lastPromptFetched) {
+            // Text has changed, ignore this suggestion
+            return;
+          }
+          suggestion = response.data.optimized;
+          renderGhost(suggestion);
+        } else {
+          clearGhost();
+        }
+      }
+    );
   }
 
   function renderGhost(text) {
     if (!currentTarget) return;
-    const rect = currentTarget.getBoundingClientRect();
+    
     if (!ghostDiv) {
       ghostDiv = document.createElement('div');
       ghostDiv.style.position = 'absolute';
@@ -78,11 +109,32 @@
       ghostDiv.style.color = 'rgba(150,150,150,0.6)';
       ghostDiv.style.whiteSpace = 'pre-wrap';
       ghostDiv.style.overflow = 'hidden';
-      ghostDiv.style.zIndex = '2147483647'; // topmost
+      ghostDiv.style.zIndex = '2147483647';
       document.body.appendChild(ghostDiv);
     }
-    // Copy font styles
+
+    updateGhostPosition();
+
+    const currentValue = getCurrentText(currentTarget);
+    const remaining = textAfterPrefix(currentValue, text);
+    
+    // Set the text content. We include the original text but make it invisible so the 
+    // remaining text aligns properly with the trailing space of the original text.
+    ghostDiv.innerHTML = `<span style="opacity: 0;">${escapeHTML(currentValue)}</span>${escapeHTML(remaining)}`;
+  }
+  
+  function escapeHTML(str) {
+    return str.replace(/[&<>'"]/g, tag => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+    }[tag] || tag));
+  }
+
+  function updateGhostPosition() {
+    if (!ghostDiv || !currentTarget) return;
+    
+    const rect = currentTarget.getBoundingClientRect();
     const style = window.getComputedStyle(currentTarget);
+    
     ghostDiv.style.font = style.font;
     ghostDiv.style.fontSize = style.fontSize;
     ghostDiv.style.lineHeight = style.lineHeight;
@@ -90,18 +142,16 @@
     ghostDiv.style.margin = style.margin;
     ghostDiv.style.border = style.border;
     ghostDiv.style.boxSizing = style.boxSizing;
-    ghostDiv.style.left = `${rect.left + window.scrollX}px`;
-    ghostDiv.style.top = `${rect.top + window.scrollY}px`;
+    ghostDiv.style.textAlign = style.textAlign;
+    
+    // Account for scrolling within the element itself, and the page
+    ghostDiv.style.left = `${rect.left + window.scrollX - currentTarget.scrollLeft}px`;
+    ghostDiv.style.top = `${rect.top + window.scrollY - currentTarget.scrollTop}px`;
     ghostDiv.style.width = `${rect.width}px`;
     ghostDiv.style.height = `${rect.height}px`;
-    // Show suggestion with same leading text as current input
-    const currentValue = currentTarget.value || currentTarget.innerText || '';
-    const remaining = textAfterPrefix(currentValue, text);
-    ghostDiv.textContent = currentValue + remaining;
   }
 
   function textAfterPrefix(current, original) {
-    // simple diff: return the part of original that is not yet typed
     if (original.startsWith(current)) return original.slice(current.length);
     return '';
   }
@@ -114,20 +164,48 @@
     suggestion = '';
   }
 
-  function onKeyDown(e) {
+  function onKeyDown(e, target) {
     if (e.key === 'Tab' && suggestion) {
+      // Prevent default focus shifting
       e.preventDefault();
-      applySuggestion();
+      applySuggestion(target);
+    } else if (e.key !== 'Shift' && e.key !== 'Control' && e.key !== 'Alt') {
+      // If pressing anything else that changes text while ghost is visible, clear it early
+      // so it doesn't linger visually before input event fires
+      clearGhost();
     }
   }
 
-  function applySuggestion() {
-    if (!currentTarget) return;
-    if (currentTarget.tagName === 'TEXTAREA') {
-      currentTarget.value = suggestion;
-    } else if (currentTarget.isContentEditable) {
-      currentTarget.innerText = suggestion;
+  function applySuggestion(target) {
+    if (!target) return;
+    const currentText = getCurrentText(target);
+    const remaining = textAfterPrefix(currentText, suggestion);
+    
+    if (!remaining) {
+      clearGhost();
+      return;
     }
+
+    target.focus();
+
+    if (target.tagName === 'TEXTAREA') {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+      nativeInputValueSetter.call(target, suggestion);
+      target.dispatchEvent(new Event('input', { bubbles: true }));
+    } else if (target.isContentEditable) {
+      // Instead of replacing all text, place the cursor at the end and insert the remaining text.
+      // Move cursor to end of the content editable
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false); // false means to the end
+      selection.removeAllRanges();
+      selection.addRange(range);
+      
+      // Execute command to insert text properly into rich editors
+      document.execCommand('insertText', false, remaining);
+    }
+    
     clearGhost();
   }
 })();
