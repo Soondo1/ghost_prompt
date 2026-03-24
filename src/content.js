@@ -14,35 +14,27 @@
   chrome.storage.sync.get({ optimizationLevel: 'concise', enabled: true }, (data) => {
     optimizationLevel = data.optimizationLevel;
     if (!data.enabled) return; // feature disabled
-    initObserver();
+    console.log('👻 Prompt Ghost successfully injected onto', window.location.hostname);
+    initGlobalListeners();
   });
 
-  function initObserver() {
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node.nodeType !== Node.ELEMENT_NODE) continue;
-          const el = node;
-          if (isInputField(el)) attachField(el);
-          // also check descendants
-          el.querySelectorAll('textarea, [contenteditable="true"]').forEach(attachField);
-        }
+  function initGlobalListeners() {
+    // Delegated event listeners grab input events from any field that exists or is added dynamically.
+    document.body.addEventListener('input', (e) => {
+      if (isInputField(e.target)) {
+        onInput(e);
       }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-    // Attach to existing fields on load
-    document.querySelectorAll('textarea, [contenteditable="true"]').forEach(attachField);
+    }, true);
+
+    document.body.addEventListener('keydown', (e) => {
+      if (isInputField(e.target)) {
+        onKeyDown(e);
+      }
+    }, true);
   }
 
   function isInputField(el) {
-    return el.tagName === 'TEXTAREA' || (el.isContentEditable && el.getAttribute('contenteditable') === 'true');
-  }
-
-  function attachField(el) {
-    if (el.__ghostAttached) return;
-    el.__ghostAttached = true;
-    el.addEventListener('input', onInput);
-    el.addEventListener('keydown', onKeyDown);
+    return el && (el.tagName === 'TEXTAREA' || el.isContentEditable);
   }
 
   function onInput(e) {
