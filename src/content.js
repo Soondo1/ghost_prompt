@@ -53,8 +53,8 @@
   }
 
   // API Endpoints
-  const API_URL = 'http://localhost:3000/optimize'; // Change to: 'https://ghost-prompt.vercel.app/optimize' after deploying to form Vercel
-  
+  const API_URL = 'https://ghost-prompt.vercel.app/optimize';
+
   async function generateSuggestion(text) {
     if (!text.trim()) {
       clearGhost();
