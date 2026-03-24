@@ -22,10 +22,11 @@ app.post('/optimize', async (req, res) => {
   }
   try {
     const systemInstruction = `You are a prompt optimizer. Convert the user's rough intent into a high-quality, token-efficient PECRA-formatted prompt. If the input is too short to optimize, return an empty string. Output ONLY the optimized text. Use ${level === 'detailed' ? 'detailed' : 'concise'} style.`;
-    const result = await model.generateContent([
-      { role: 'system', parts: [{ text: systemInstruction }] },
-      { role: 'user', parts: [{ text: prompt }] }
-    ]);
+    
+    // Pass the system instruction directly into the prompt argument instead of the roles array
+    // This avoids crashes if the backend SDK rejects the 'system' role.
+    const result = await model.generateContent(`${systemInstruction}\n\nInput to optimize:\n${prompt}`);
+    
     const response = await result.response;
     const optimized = response.text().trim();
     res.json({ optimized });
