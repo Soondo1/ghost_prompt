@@ -22,5 +22,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(error => sendResponse({ success: false, error: error.message }));
     
     return true; // Keep message channel open for async response
+  } 
+  else if (message.action === 'transformText') {
+    const API_URL = 'https://ghost-prompt.vercel.app/transform';
+    fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: message.prompt })
+    })
+      .then(res => res.json())
+      .then(data => sendResponse({ success: true, data }))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    
+    return true;
   }
 });

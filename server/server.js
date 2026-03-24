@@ -36,6 +36,31 @@ app.post('/optimize', async (req, res) => {
   }
 });
 
+app.post('/transform', async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt || !prompt.trim()) {
+    return res.json({ results: [] });
+  }
+  try {
+    const systemInstruction = `You are a prompt optimizer. The user will provide a rough intent. Provide exactly 2 distinct optimized variations of their prompt. Variation 1 should be concise and direct. Variation 2 should be detailed and comprehensive. Format your response as a strict JSON array of strings containing ONLY the two strings, e.g. ["concise prompt", "detailed prompt"]. NEVER include markdown code blocks around the JSON. Return raw JSON.`;
+    
+    const result = await model.generateContent(`${systemInstruction}\n\nInput to optimize:\n${prompt}`);
+    
+    const response = await result.response;
+    let text = response.text().trim();
+    // remove markdown formatting if Gemini included it despite instructions
+    if (text.startsWith('```')) {
+      text = text.replace(/```json\n?|\n?```/g, '');
+    }
+    
+    const results = JSON.parse(text);
+    res.json({ results });
+  } catch (error) {
+    console.error('Gemini error:', error);
+    res.status(500).json({ error: 'Transformation failed' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== 'production') {
   app.listen(PORT, () => {
