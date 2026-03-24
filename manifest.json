@@ -6,8 +6,7 @@
   "permissions": [
     "storage",
     "activeTab",
-    "scripting",
-    "http://localhost/*"
+    "scripting"
   ],
   "host_permissions": [
     "*://chat.openai.com/*",
