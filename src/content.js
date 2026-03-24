@@ -52,13 +52,16 @@
     debounceTimer = setTimeout(() => generateSuggestion(target.value), DEBOUNCE_DELAY);
   }
 
+  // API Endpoints
+  const API_URL = 'http://localhost:3000/optimize'; // Change to: 'https://ghost-prompt.vercel.app/optimize' after deploying to form Vercel
+  
   async function generateSuggestion(text) {
     if (!text.trim()) {
       clearGhost();
       return;
     }
     try {
-      const resp = await fetch('http://localhost:3000/optimize', {
+      const resp = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: text, level: optimizationLevel })
