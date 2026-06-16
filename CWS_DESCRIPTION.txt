@@ -1,0 +1,30 @@
+Prompt Ghost - Real-Time AI Prompt Optimizer
+
+Supercharge your LLM prompts in real-time. Prompt Ghost runs quietly in the background on your favorite chat interfaces, providing instant, AI-optimized suggestions to make your prompts more concise, detailed, and effective.
+
+FEATURES:
+- Real-Time Suggestions: As you type in any LLM textarea, Prompt Ghost analyzes your input and suggests an optimized version in-place.
+- In-Place Autocomplete: Simply press Tab to accept the optimized suggestion and replace your text.
+- Dual Transformation: Toggle between concise and detailed variations of your prompts in the popup interface.
+- Prompt History: Keep track of your past queries, optimized variations, and acceptance rates with a built-in History feed.
+- Usage Tracking: View your daily API limits, tokens consumed, and quota metrics with visual progress bars.
+
+SUPPORTED PLATFORMS:
+- ChatGPT (chatgpt.com)
+- Claude AI (claude.ai)
+- Gemini (gemini.google.com)
+- Perplexity (perplexity.ai)
+- DeepSeek (deepseek.com)
+- Poe (poe.com)
+- Microsoft Copilot
+- Hugging Face Chat
+- Meta AI
+
+HOW TO USE:
+1. Load the extension and sign up / log in via the popup window.
+2. Navigate to any supported LLM platform.
+3. Start typing your prompt. A "ghost" suggestion will appear showing the optimized prompt.
+4. Press `Tab` to accept the suggestion instantly, or keep typing to ignore it.
+5. Open the popup to browse your prompt history, configure optimization levels, or monitor your remaining daily quota.
+
+Privacy first: Your prompt text is transmitted securely over HTTPS and is never shared or sold to third parties.

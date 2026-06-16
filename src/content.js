@@ -11,6 +11,7 @@
   let optimizationLevel = 'concise';
   let resizeObserver = null;
   let lastPromptFetched = '';
+  let currentSuggestionId = null;
 
   chrome.storage.sync.get({ optimizationLevel: 'concise', enabled: true }, (data) => {
     optimizationLevel = data.optimizationLevel;
@@ -73,6 +74,7 @@
 
   function generateSuggestion(text) {
     lastPromptFetched = text;
+    currentSuggestionId = null;
     
     chrome.runtime.sendMessage(
       { action: 'fetchSuggestion', prompt: text, level: optimizationLevel },
@@ -91,6 +93,7 @@
             return;
           }
           suggestion = response.data.optimized;
+          currentSuggestionId = response.data.id;
           renderGhost(suggestion);
         } else {
           clearGhost();
@@ -162,6 +165,7 @@
       ghostDiv = null;
     }
     suggestion = '';
+    currentSuggestionId = null;
   }
 
   function onKeyDown(e, target) {
@@ -206,6 +210,14 @@
       document.execCommand('insertText', false, remaining);
     }
     
+    if (currentSuggestionId) {
+      chrome.runtime.sendMessage({ action: 'reportAcceptance', historyId: currentSuggestionId }, (res) => {
+        if (chrome.runtime.lastError) {
+          console.error('Failed to report acceptance:', chrome.runtime.lastError);
+        }
+      });
+    }
+
     clearGhost();
   }
 })();

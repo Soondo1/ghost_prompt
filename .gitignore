@@ -3,3 +3,7 @@ dist/
 .env
 .DS_Store
 build_error.log
+.tmp/
+.agents/
+skills-lock.json
+scratch_test.js
