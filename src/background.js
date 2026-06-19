@@ -1,7 +1,7 @@
 // src/background.js
 // Service worker for Prompt Ghost extension (Manifest V3)
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = 'https://ghost-prompt.vercel.app';
 
 chrome.runtime.onInstalled.addListener(() => {
   // Set default settings

@@ -92,7 +92,7 @@ def run_cache_test(base_url):
             return False
 
         # Use the cached test prompt to ensure Gemini API quota is not hit
-        test_prompt = "write a quick email"
+        test_prompt = "explain quantum computing in simple terms"
         level = "concise"
 
         payload = {
@@ -107,7 +107,7 @@ def run_cache_test(base_url):
         # That's fine, we check if cache is active.
         logger.info("Sending first request...")
         start_time = time.time()
-        r1 = requests.post(optimize_url, json=payload, headers=headers, timeout=15)
+        r1 = requests.post(optimize_url, json=payload, headers=headers, timeout=30)
         duration_miss = time.time() - start_time
 
         if r1.status_code != 200:

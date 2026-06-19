@@ -57,19 +57,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const getSupabaseClient = () => createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
-    }
+const getSupabaseClient = () => {
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Supabase credentials missing in environment variables');
   }
-);
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    }
+  );
+};
 
 const authMiddleware = async (req, res, next) => {
-  const supabase = getSupabaseClient();
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Unauthorized: Missing or invalid token' });
@@ -77,6 +81,7 @@ const authMiddleware = async (req, res, next) => {
 
   const token = authHeader.split(' ')[1];
   try {
+    const supabase = getSupabaseClient();
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
@@ -90,11 +95,11 @@ const authMiddleware = async (req, res, next) => {
 };
 
 const rateLimitMiddleware = async (req, res, next) => {
-  const supabase = getSupabaseClient();
   const userId = req.user.id;
   const today = new Date().toISOString().split('T')[0];
 
   try {
+    const supabase = getSupabaseClient();
     const { data: profile } = await supabase
       .from('users')
       .select('daily_limit')
@@ -126,7 +131,6 @@ const rateLimitMiddleware = async (req, res, next) => {
 
 // Auth routes
 app.post('/auth/signup', async (req, res) => {
-  const supabase = getSupabaseClient();
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
@@ -136,6 +140,7 @@ app.post('/auth/signup', async (req, res) => {
   }
 
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -171,13 +176,13 @@ app.post('/auth/signup', async (req, res) => {
 });
 
 app.post('/auth/login', async (req, res) => {
-  const supabase = getSupabaseClient();
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
   }
 
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       return res.status(error.status || 400).json({ error: error.message });
@@ -206,13 +211,13 @@ app.post('/auth/login', async (req, res) => {
 });
 
 app.post('/auth/refresh', async (req, res) => {
-  const supabase = getSupabaseClient();
   const { refresh_token } = req.body;
   if (!refresh_token) {
     return res.status(400).json({ error: 'Missing refresh token' });
   }
 
   try {
+    const supabase = getSupabaseClient();
     const { data, error } = await supabase.auth.refreshSession({ refresh_token });
     if (error) {
       return res.status(error.status || 400).json({ error: error.message });
@@ -234,13 +239,13 @@ app.post('/auth/refresh', async (req, res) => {
 
 // History routes
 app.get('/history', authMiddleware, async (req, res) => {
-  const supabase = getSupabaseClient();
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 20;
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
   try {
+    const supabase = getSupabaseClient();
     const { data: items, error, count } = await supabase
       .from('prompt_history')
       .select('*', { count: 'exact' })
@@ -267,13 +272,13 @@ app.get('/history', authMiddleware, async (req, res) => {
 });
 
 app.post('/history/accept', authMiddleware, async (req, res) => {
-  const supabase = getSupabaseClient();
   const { id } = req.body;
   if (!id) {
     return res.status(400).json({ error: 'Missing history item id' });
   }
 
   try {
+    const supabase = getSupabaseClient();
     const { error } = await supabase
       .from('prompt_history')
       .update({ was_accepted: true })
@@ -293,12 +298,12 @@ app.post('/history/accept', authMiddleware, async (req, res) => {
 
 // Usage route
 app.get('/usage', authMiddleware, async (req, res) => {
-  const supabase = getSupabaseClient();
   const days = parseInt(req.query.days) || 30;
   const userId = req.user.id;
   const today = new Date().toISOString().split('T')[0];
 
   try {
+    const supabase = getSupabaseClient();
     const { data: profile } = await supabase
       .from('users')
       .select('daily_limit')
@@ -344,7 +349,6 @@ app.get('/usage', authMiddleware, async (req, res) => {
 });
 
 app.post('/optimize', authMiddleware, rateLimitMiddleware, async (req, res) => {
-  const supabase = getSupabaseClient();
   const { prompt, level = 'concise' } = req.body;
   if (!prompt || !prompt.trim()) {
     return res.json({ optimized: '' });
@@ -353,6 +357,7 @@ app.post('/optimize', authMiddleware, rateLimitMiddleware, async (req, res) => {
   const startTime = Date.now();
   const promptHash = crypto.createHash('sha256').update(`${prompt}:${level}`).digest('hex');
   try {
+    const supabase = getSupabaseClient();
     // 1. Check Cache
     const isoTime = new Date().toISOString();
     const { data: cachedEntry, error: cacheErr } = await supabase
@@ -543,7 +548,6 @@ app.post('/optimize', authMiddleware, rateLimitMiddleware, async (req, res) => {
 });
 
 app.post('/transform', authMiddleware, rateLimitMiddleware, async (req, res) => {
-  const supabase = getSupabaseClient();
   const { prompt } = req.body;
   if (!prompt || !prompt.trim()) {
     return res.json({ results: [] });
@@ -553,6 +557,7 @@ app.post('/transform', authMiddleware, rateLimitMiddleware, async (req, res) => 
   const promptHash = crypto.createHash('sha256').update(`${prompt}:transform`).digest('hex');
 
   try {
+    const supabase = getSupabaseClient();
     // 1. Check Cache
     const { data: cachedEntry } = await supabase
       .from('cache_entries')
@@ -747,7 +752,6 @@ app.post('/transform', authMiddleware, rateLimitMiddleware, async (req, res) => 
 });
 // Health check route
 app.get('/health', async (req, res) => {
-  const supabase = getSupabaseClient();
   const healthStatus = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
@@ -764,6 +768,7 @@ app.get('/health', async (req, res) => {
   // 1. Check Database
   const startDbTime = Date.now();
   try {
+    const supabase = getSupabaseClient();
     const { error } = await supabase
       .from('users')
       .select('id')

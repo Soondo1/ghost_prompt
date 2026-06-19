@@ -13,12 +13,30 @@
   let lastPromptFetched = '';
   let currentSuggestionId = null;
 
-  chrome.storage.sync.get({ optimizationLevel: 'concise', enabled: true }, (data) => {
-    optimizationLevel = data.optimizationLevel;
-    if (!data.enabled) return;
-    console.log('👻 Prompt Ghost successfully injected onto', window.location.hostname);
-    initGlobalListeners();
-  });
+  // Guard: check if the extension runtime context is still valid.
+  // When the extension is reloaded/updated, content scripts lose their
+  // connection to the background service worker and chrome.runtime becomes
+  // invalid. Any call to chrome.runtime.sendMessage will throw
+  // "Extension context invalidated" if we don't check first.
+  function isContextValid() {
+    try {
+      return !!(chrome && chrome.runtime && chrome.runtime.id);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  try {
+    chrome.storage.sync.get({ optimizationLevel: 'concise', enabled: true }, (data) => {
+      optimizationLevel = data.optimizationLevel;
+      if (!data.enabled) return;
+      console.log('👻 Prompt Ghost successfully injected onto', window.location.hostname);
+      initGlobalListeners();
+    });
+  } catch (e) {
+    console.warn('👻 Prompt Ghost: Extension context not available, content script will not activate.', e.message);
+    return;
+  }
 
   function initGlobalListeners() {
     document.body.addEventListener('input', (e) => {
@@ -73,33 +91,43 @@
   }
 
   function generateSuggestion(text) {
+    if (!isContextValid()) {
+      clearGhost();
+      return;
+    }
+
     lastPromptFetched = text;
     currentSuggestionId = null;
     
-    chrome.runtime.sendMessage(
-      { action: 'fetchSuggestion', prompt: text, level: optimizationLevel },
-      (response) => {
-        if (chrome.runtime.lastError) {
-          console.error('Prompt Ghost error:', chrome.runtime.lastError);
-          clearGhost();
-          return;
-        }
-        
-        if (response && response.success && response.data.optimized) {
-          // Race condition check: Ensure the user hasn't typed more since the request
-          const currentText = getCurrentText(currentTarget);
-          if (currentText !== lastPromptFetched) {
-            // Text has changed, ignore this suggestion
+    try {
+      chrome.runtime.sendMessage(
+        { action: 'fetchSuggestion', prompt: text, level: optimizationLevel },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            // Silently handle — context may have been invalidated between send and callback
+            clearGhost();
             return;
           }
-          suggestion = response.data.optimized;
-          currentSuggestionId = response.data.id;
-          renderGhost(suggestion);
-        } else {
-          clearGhost();
+          
+          if (response && response.success && response.data.optimized) {
+            // Race condition check: Ensure the user hasn't typed more since the request
+            const currentText = getCurrentText(currentTarget);
+            if (currentText !== lastPromptFetched) {
+              // Text has changed, ignore this suggestion
+              return;
+            }
+            suggestion = response.data.optimized;
+            currentSuggestionId = response.data.id;
+            renderGhost(suggestion);
+          } else {
+            clearGhost();
+          }
         }
-      }
-    );
+      );
+    } catch (e) {
+      // Extension context invalidated — extension was reloaded/updated
+      clearGhost();
+    }
   }
 
   function renderGhost(text) {
@@ -210,12 +238,16 @@
       document.execCommand('insertText', false, remaining);
     }
     
-    if (currentSuggestionId) {
-      chrome.runtime.sendMessage({ action: 'reportAcceptance', historyId: currentSuggestionId }, (res) => {
-        if (chrome.runtime.lastError) {
-          console.error('Failed to report acceptance:', chrome.runtime.lastError);
-        }
-      });
+    if (currentSuggestionId && isContextValid()) {
+      try {
+        chrome.runtime.sendMessage({ action: 'reportAcceptance', historyId: currentSuggestionId }, (res) => {
+          if (chrome.runtime.lastError) {
+            // Silently handle — context may have been invalidated
+          }
+        });
+      } catch (e) {
+        // Extension context invalidated — extension was reloaded/updated
+      }
     }
 
     clearGhost();
